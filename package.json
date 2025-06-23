@@ -1,0 +1,23 @@
+{
+  "name": "llm-scifi-game",
+  "version": "1.0.0",
+  "description": "A 2D tile-based browser game with LLM-powered NPCs",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "backend": "python backend/app.py",
+    "start": "concurrently \"npm run dev\" \"npm run backend\""
+  },
+  "dependencies": {
+    "phaser": "^3.70.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0",
+    "concurrently": "^8.2.2"
+  },
+  "keywords": ["game", "phaser", "llm", "scifi", "rpg"],
+  "author": "Your Name",
+  "license": "MIT"
+} 

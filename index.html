@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LLM Sci-Fi Game</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background: #000;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            font-family: 'Arial', sans-serif;
+        }
+        
+        #game-container {
+            position: relative;
+            border: 2px solid #333;
+        }
+        
+        .ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 1000;
+        }
+        
+        .ui-overlay * {
+            pointer-events: auto;
+        }
+    </style>
+</head>
+<body>
+    <div id="game-container">
+        <div id="phaser-game"></div>
+        <div class="ui-overlay" id="ui-overlay"></div>
+    </div>
+    
+    <script type="module" src="/src/main.js"></script>
+</body>
+</html> 
