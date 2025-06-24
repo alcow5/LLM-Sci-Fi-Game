@@ -1,6 +1,7 @@
 # LLM Sci-Fi Game
 
 A 2D tile-based browser game with LLM-powered NPCs, dynamic quest generation, inventory system, and interactive dialogue using Phaser.js and Flask with Ollama integration.
+![image](https://github.com/user-attachments/assets/bb506c25-09a5-4729-99a7-eeae96eb5dc7)
 
 ---
 
