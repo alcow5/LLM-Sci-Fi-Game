@@ -6,13 +6,14 @@ import requests
 from datetime import datetime
 import logging
 import re
+import random
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
 # Configuration
 OLLAMA_URL = os.getenv('OLLAMA_URL', 'http://localhost:11434')
-OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'mythomax-13b')
+OLLAMA_MODEL = os.getenv('OLLAMA_MODEL', 'llama2-uncensored')
 USE_LLM_QUESTS = os.getenv('USE_LLM_QUESTS', 'true').lower() == 'true'  # Enable LLM quest generation
 
 # MythoMax-13B context window: ~8,192 tokens (similar to Llama 3)
@@ -373,6 +374,11 @@ def get_npc_data_by_name(npc_name):
             'id': 'medic_dr_kim',
             'personality': 'compassionate, professional, slightly overwhelmed',
             'role': 'Medical Officer'
+        },
+        'Rick "The Unfiltered"': {
+            'id': 'rick_unfiltered',
+            'personality': 'completely unfiltered, crude, says whatever comes to mind, no social boundaries',
+            'role': 'Unfiltered Resident'
         }
     }
     return npc_data.get(npc_name)
@@ -409,14 +415,17 @@ def generate_llm_dialogue_response(npc_name, personality, role, background, dial
             result = response.json()
             llm_response = result.get('response', '').strip()
             
+            # Clean the response to remove any instruction text
+            cleaned_response = clean_dialogue_response(llm_response)
+            
             # Log the response received
             logger.info(f"=== DIALOGUE RESPONSE ===")
             logger.info(f"NPC: {npc_name}")
             logger.info(f"Response Received:")
-            logger.info(llm_response)
+            logger.info(cleaned_response)
             logger.info(f"========================")
             
-            return llm_response
+            return cleaned_response
         else:
             # Log error
             logger.error(f"Ollama API error: {response.status_code} - {response.text}")
@@ -427,20 +436,97 @@ def generate_llm_dialogue_response(npc_name, personality, role, background, dial
         logger.error(f"Error generating LLM response: {e}")
         return get_fallback_dialogue_response(npc_name)
 
-def create_dialogue_prompt(npc_name, personality, role, background, dialogue_style, player_message, player_context, memory_context):
-    """Create a prompt for the LLM based on NPC and context"""
+def clean_dialogue_response(response_text):
+    """Clean LLM response to remove instruction text and memory context"""
+    if not response_text:
+        return "I'm not sure how to respond to that."
     
-    # Simplify context for dialogue generation
+    # Remove common instruction patterns
+    patterns_to_remove = [
+        r"If the player asks about.*?\.",  # Remove instruction text
+        r"Respond as.*?\.",  # Remove instruction text
+        r"Keep responses under.*?\.",  # Remove instruction text
+        r"Be true to.*?\.",  # Remove instruction text
+        r"If there are relevant memories.*?\.",  # Remove instruction text
+        r"Response:",  # Remove response labels
+        r"Answer:",  # Remove answer labels
+        r"Dialogue:",  # Remove dialogue labels
+        r"=== NPC MEMORY CONTEXT ===",  # Remove memory context headers
+        r"=== END MEMORY CONTEXT ===",  # Remove memory context footers
+        r"RELATIONSHIP STATUS:.*?RECENT CONVERSATION CONTEXT:.*?=== END MEMORY CONTEXT ===",  # Remove full memory context
+        r"IMPORTANT INSTRUCTIONS:.*?DO NOT include instruction text in your response",  # Remove instruction block
+        r"PERSONALITY:.*?DIALOGUE STYLE:.*?PLAYER CONTEXT:.*?The player says:",  # Remove full prompt
+    ]
+    
+    cleaned = response_text.strip()
+    
+    # Apply pattern removals
+    for pattern in patterns_to_remove:
+        cleaned = re.sub(pattern, "", cleaned, flags=re.DOTALL | re.IGNORECASE)
+    
+    # Remove lines that look like memory context
+    lines = cleaned.split('\n')
+    filtered_lines = []
+    in_memory_context = False
+    
+    for line in lines:
+        line = line.strip()
+        if not line:
+            continue
+            
+        # Skip memory context lines
+        if any(keyword in line.lower() for keyword in [
+            'relationship status:', 'trust:', 'friendship:', 'respect:', 'attraction:',
+            'personal_info:', 'relationship:', 'promises:', 'emotional:', 'gossip:', 'trade:', 'quests:',
+            'recent conversation context:', 'player:', 'npc:', 'emotion:',
+            '===', 'memory context', 'end memory context'
+        ]):
+            continue
+            
+        # Skip instruction lines
+        if any(keyword in line.lower() for keyword in [
+            'important instructions:', 'respond naturally', 'keep responses', 'be true to',
+            'use the memory context', 'do not include', 'personality:', 'background:', 'dialogue style:'
+        ]):
+            continue
+            
+        filtered_lines.append(line)
+    
+    cleaned = ' '.join(filtered_lines).strip()
+    
+    # If we have a meaningful response, return it
+    if cleaned and len(cleaned) > 5:
+        return cleaned
+    
+    # Fallback responses if cleaning removed everything
+    fallback_responses = [
+        "I'm not sure how to respond to that.",
+        "That's an interesting question.",
+        "I need to think about that for a moment.",
+        "Let me consider what you're asking."
+    ]
+    
+    return random.choice(fallback_responses)
+
+def create_dialogue_prompt(npc_name, personality, role, background, dialogue_style, player_message, player_context, memory_context):
+    """Create a prompt for dialogue generation"""
+    
+    # Simplify context for dialogue
     simplified_context = {
         'crypto': player_context.get('crypto', 0),
         'active_quests_count': len(player_context.get('active_quests', [])),
         'inventory_count': len(player_context.get('inventory', []))
     }
     
-    # Build memory section
-    memory_section = ""
-    if memory_context and memory_context.strip():
-        memory_section = f"\n\nPREVIOUS CONVERSATION MEMORIES:\n{memory_context}\n\nIMPORTANT: Use these memories to make the conversation more personal and follow up on previous topics when relevant. If the player asks about something you discussed before, reference those memories naturally."
+    # Format memory context - handle both old and new formats
+    memory_text = ""
+    if memory_context:
+        if "=== NPC MEMORY CONTEXT ===" in memory_context:
+            # New enhanced format - use as is
+            memory_text = memory_context
+        else:
+            # Old format - convert to new format
+            memory_text = f"\n\n=== NPC MEMORY CONTEXT ===\n{memory_context}\n=== END MEMORY CONTEXT ===\n\n"
     
     prompt = f"""You are {npc_name}, a {role} in a sci-fi frontier outpost.
 
@@ -448,14 +534,23 @@ PERSONALITY: {personality}
 BACKGROUND: {background}
 DIALOGUE STYLE: {dialogue_style}
 
-PLAYER CONTEXT: {json.dumps(simplified_context, separators=(',', ':'))}
-{memory_section}
+PLAYER CONTEXT: {simplified_context}
+
+{memory_text}
 
 The player says: "{player_message}"
 
-Respond as {npc_name} in a natural, conversational way. Keep responses under 2-3 sentences. Be true to your personality and role. If there are relevant memories, reference them naturally in your response to show you remember previous conversations.
+IMPORTANT INSTRUCTIONS:
+- Respond naturally as {npc_name} in character
+- Keep responses under 2-3 sentences
+- Use the memory context to inform your response, but don't repeat it
+- Be true to your personality and role
+- If you remember something relevant from the memory context, reference it naturally
+- DO NOT include the memory context text in your response
+- DO NOT include instruction text in your response
 
-Response:"""
+{npc_name}:
+"""
     
     return prompt
 
@@ -519,7 +614,7 @@ def create_quest_prompt(npc_id, npc_name, personality, role, player_context, exi
     available_npcs = available_npcs or []
     player_suggestion = player_suggestion or ""
     
-    prompt = f"""Generate a quest for a sci-fi frontier outpost.
+    prompt = f"""You are generating a quest for a sci-fi frontier outpost game. You must respond with ONLY valid JSON, no other text.
 
 NPC: {npc_name} - {role}
 PERSONALITY: {personality}
@@ -535,47 +630,112 @@ Create a quest fitting this NPC's role. IMPORTANT: Consider the player's suggest
 - If they want a talking quest, create a talk_to_npc quest
 - Only use items from AVAILABLE_ITEMS and NPCs from AVAILABLE_NPCS
 
-Return as JSON with these exact fields:
+You must respond with ONLY this exact JSON format, no other text:
 {{
-    "quest_type": "collect_item" or "talk_to_npc",
+    "quest_type": "collect_item",
     "title": "Quest Title", 
     "description": "Quest description",
-    "target_item": "item_name" (only for collect_item quests),
-    "quantity": 1 (only for collect_item quests),
-    "target_npc": "NPC_name" (only for talk_to_npc quests),
+    "target_item": "item_name",
+    "quantity": 1,
     "reward_crypto": 15,
     "response": "NPC's response when offering the quest"
 }}
 
-Quest:"""
+OR for talk quests:
+{{
+    "quest_type": "talk_to_npc",
+    "title": "Quest Title", 
+    "description": "Quest description",
+    "target_npc": "NPC_name",
+    "reward_crypto": 15,
+    "response": "NPC's response when offering the quest"
+}}
+
+Respond with ONLY the JSON:"""
     
     return prompt
 
 def parse_quest_response(quest_text, npc_id, available_items=None, available_npcs=None, player_suggestion=None):
     """Parse LLM response into quest structure"""
     try:
-        # Try to extract JSON from the response
+        # Clean the response text
+        quest_text = quest_text.strip()
+        
+        # Strategy 1: Try to find JSON between curly braces
         if '{' in quest_text and '}' in quest_text:
             start = quest_text.find('{')
             end = quest_text.rfind('}') + 1
             json_str = quest_text[start:end]
-            quest = json.loads(json_str)
             
-            # Validate and fix quest data
-            quest = validate_quest_data(quest, available_items, available_npcs, player_suggestion)
-            
-            # Ensure required fields
-            quest['id'] = quest.get('id', f"{npc_id}_quest_{datetime.now().timestamp()}")
-            quest['status'] = 'available'
-            
-            return quest
-        else:
-            # Fallback if no JSON found
-            logger.warning(f"No JSON found in quest response for NPC {npc_id}")
-            return get_fallback_quest(npc_id)
+            # Try to parse the JSON
+            try:
+                quest = json.loads(json_str)
+                logger.info(f"Successfully parsed JSON from LLM response")
+                
+                # Validate and fix quest data
+                quest = validate_quest_data(quest, available_items, available_npcs, player_suggestion)
+                
+                # Ensure required fields
+                quest['id'] = quest.get('id', f"{npc_id}_quest_{datetime.now().timestamp()}")
+                quest['status'] = 'available'
+                
+                return quest
+            except json.JSONDecodeError as e:
+                logger.warning(f"JSON parsing failed: {e}")
+        
+        # Strategy 2: Try to extract JSON from lines that look like JSON
+        lines = quest_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line.startswith('{') and line.endswith('}'):
+                try:
+                    quest = json.loads(line)
+                    logger.info(f"Successfully parsed JSON from line: {line}")
+                    
+                    # Validate and fix quest data
+                    quest = validate_quest_data(quest, available_items, available_npcs, player_suggestion)
+                    
+                    # Ensure required fields
+                    quest['id'] = quest.get('id', f"{npc_id}_quest_{datetime.now().timestamp()}")
+                    quest['status'] = 'available'
+                    
+                    return quest
+                except json.JSONDecodeError:
+                    continue
+        
+        # Strategy 3: Try to fix common JSON issues
+        # Remove quotes around the entire response if present
+        if quest_text.startswith('"') and quest_text.endswith('"'):
+            quest_text = quest_text[1:-1]
+        
+        # Try to find the first valid JSON object
+        import re
+        json_pattern = r'\{[^{}]*(?:\{[^{}]*\}[^{}]*)*\}'
+        matches = re.findall(json_pattern, quest_text)
+        
+        for match in matches:
+            try:
+                quest = json.loads(match)
+                logger.info(f"Successfully parsed JSON using regex: {match}")
+                
+                # Validate and fix quest data
+                quest = validate_quest_data(quest, available_items, available_npcs, player_suggestion)
+                
+                # Ensure required fields
+                quest['id'] = quest.get('id', f"{npc_id}_quest_{datetime.now().timestamp()}")
+                quest['status'] = 'available'
+                
+                return quest
+            except json.JSONDecodeError:
+                continue
+        
+        # If all strategies fail, log the problematic response and fallback
+        logger.error(f"Failed to parse quest response. Raw response: {quest_text}")
+        return get_fallback_quest(npc_id)
             
     except Exception as e:
         logger.error(f"Error parsing quest response: {e}")
+        logger.error(f"Raw response was: {quest_text}")
         return get_fallback_quest(npc_id)
 
 def validate_quest_data(quest, available_items=None, available_npcs=None, player_suggestion=None):
@@ -763,6 +923,21 @@ def get_fallback_quest(npc_id):
                     'id': 'gather_supplies',
                     'description': 'Collect medical supplies from 4 locations',
                     'target': 4,
+                    'progress': 0
+                }
+            ]
+        },
+        'rick_unfiltered': {
+            'id': f'fallback_rick_{datetime.now().timestamp()}',
+            'title': 'Shady Business',
+            'description': 'Help me with some... let\'s say "unofficial" business around the outpost. Nothing illegal, just... creative.',
+            'reward': 'Some crypto and maybe some interesting stories',
+            'status': 'available',
+            'objectives': [
+                {
+                    'id': 'shady_tasks',
+                    'description': 'Complete some questionable but profitable tasks',
+                    'target': 3,
                     'progress': 0
                 }
             ]

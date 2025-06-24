@@ -34,12 +34,13 @@ export class UIManager {
             position: absolute;
             bottom: 150px;
             left: 20px;
-            right: 20px;
-            max-height: 250px;
+            right: 240px; /* leave space for inventory */
+            max-width: calc(100vw - 280px);
+            max-height: 220px;
             background: rgba(0, 0, 0, 0.9);
             border: 2px solid #00ff00;
             border-radius: 10px;
-            padding: 20px;
+            padding: 16px;
             color: white;
             font-family: 'Courier New', monospace;
             display: none;
@@ -128,18 +129,20 @@ export class UIManager {
         this.messageContainer = document.createElement('div');
         this.messageContainer.style.cssText = `
             position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
+            top: 20px;
+            left: 20px;
+            max-width: 300px;
             background: rgba(0, 0, 0, 0.9);
             border: 2px solid #ff0000;
             border-radius: 10px;
-            padding: 20px;
+            padding: 15px;
             color: white;
             font-family: 'Courier New', monospace;
-            text-align: center;
+            font-size: 14px;
+            text-align: left;
             display: none;
             z-index: 1002;
+            word-wrap: break-word;
         `;
         
         this.container.appendChild(this.messageContainer);
@@ -151,11 +154,12 @@ export class UIManager {
             position: absolute;
             bottom: 20px;
             left: 20px;
-            right: 20px;
+            right: 240px; /* leave space for inventory */
+            max-width: calc(100vw - 280px);
             background: rgba(0, 0, 0, 0.9);
             border: 2px solid #0066ff;
             border-radius: 10px;
-            padding: 12px;
+            padding: 8px;
             color: white;
             font-family: 'Courier New', monospace;
             display: none;
@@ -189,14 +193,14 @@ export class UIManager {
         inventoryContainer.id = 'inventory-container';
         inventoryContainer.style.cssText = `
             position: absolute;
-            top: 150px;
+            bottom: 20px;
             right: 20px;
-            width: 254px;
+            width: 200px;
             z-index: 1000;
         `;
 
         const toggleButton = document.createElement('button');
-        toggleButton.textContent = 'Inventory (I)';
+        toggleButton.textContent = 'INVENTORY';
         toggleButton.style.cssText = `
             display: block;
             width: 100%;
@@ -204,11 +208,12 @@ export class UIManager {
             background: #00ffff;
             border: 2px solid #00ffff;
             border-bottom: none;
-            border-top-left-radius: 10px;
-            border-top-right-radius: 10px;
-            padding: 10px;
+            border-top-left-radius: 8px;
+            border-top-right-radius: 8px;
+            padding: 8px;
             color: black;
             font-weight: bold;
+            font-size: 12px;
             cursor: pointer;
         `;
         toggleButton.onclick = () => this.toggleInventory();
@@ -235,15 +240,15 @@ export class UIManager {
         this.inventoryGrid = document.createElement('div');
         this.inventoryGrid.id = 'inventory-grid';
         this.inventoryGrid.style.cssText = `
-            display: none; /* Initially hidden */
-            grid-template-columns: repeat(4, 50px);
-            grid-gap: 10px;
+            display: grid; /* Always visible */
+            grid-template-columns: repeat(4, 40px);
+            grid-gap: 5px;
             background: rgba(0, 0, 0, 0.8);
             border: 2px solid #00ffff;
             border-top: none;
-            border-bottom-left-radius: 10px;
-            border-bottom-right-radius: 10px;
-            padding: 10px;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            padding: 8px;
         `;
         
         // Create slots
@@ -251,11 +256,11 @@ export class UIManager {
             const slot = document.createElement('div');
             slot.className = 'inventory-slot';
             slot.style.cssText = `
-                width: 50px;
-                height: 50px;
+                width: 40px;
+                height: 40px;
                 background: rgba(255, 255, 255, 0.1);
                 border: 1px solid #00ffff;
-                border-radius: 5px;
+                border-radius: 3px;
                 position: relative;
             `;
             this.inventoryGrid.appendChild(slot);
@@ -271,18 +276,19 @@ export class UIManager {
             background: rgba(0, 0, 0, 0.8);
             border: 2px solid #00ff00;
             border-top: none;
-            border-bottom-left-radius: 10px;
-            border-bottom-right-radius: 10px;
-            padding: 10px;
+            border-bottom-left-radius: 8px;
+            border-bottom-right-radius: 8px;
+            padding: 8px;
             color: white;
             font-family: 'Courier New', monospace;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             text-align: center;
+            margin-top: 5px;
         `;
         
         this.cryptoDisplay.innerHTML = `
-            <div style="color: #00ff00; margin-bottom: 5px;">CRYPTO</div>
+            <div style="color: #00ff00; margin-bottom: 3px; font-size: 10px;">CRYPTO</div>
             <div id="crypto-count">0</div>
         `;
         
@@ -495,7 +501,7 @@ export class UIManager {
         }
     }
 
-    showMessage(message, duration = 3000) {
+    showMessage(message, duration = 2000) {
         this.messageQueue.push({ message, duration });
         this.processMessageQueue();
     }
@@ -524,31 +530,31 @@ export class UIManager {
 
     showCustomInput(callback, placeholder = "Enter your message here...") {
         this.customInputContainer.innerHTML = `
-            <div style="margin-bottom: 5px; color: #0066ff; font-weight: bold; font-size: 14px;">
+            <div style="margin-bottom: 5px; color: #0066ff; font-weight: bold; font-size: 13px;">
                 Type your message:
             </div>
-            <div style="margin-bottom: 5px; color: #ffaa00; font-size: 11px;">
+            <div style="margin-bottom: 5px; color: #ffaa00; font-size: 10px;">
                 ⚠️ Press Enter to send, Escape to cancel.
             </div>
             <textarea id="custom-message-input" placeholder="${placeholder}" style="
                 width: 100%;
-                height: 50px;
+                height: 36px;
                 background: rgba(0, 0, 0, 0.7);
                 border: 1px solid #0066ff;
                 border-radius: 5px;
-                padding: 8px;
+                padding: 6px;
                 color: white;
                 font-family: 'Courier New', monospace;
                 resize: none;
-                margin-bottom: 8px;
-                font-size: 14px;
+                margin-bottom: 6px;
+                font-size: 13px;
             "></textarea>
             <div style="text-align: right;">
                 <button onclick="window.uiManager.sendCustomMessage()" style="
                     background: #0066ff;
                     border: none;
                     border-radius: 5px;
-                    padding: 6px 12px;
+                    padding: 5px 10px;
                     color: white;
                     cursor: pointer;
                     margin-right: 8px;
@@ -558,7 +564,7 @@ export class UIManager {
                     background: #666;
                     border: none;
                     border-radius: 5px;
-                    padding: 6px 12px;
+                    padding: 5px 10px;
                     color: white;
                     cursor: pointer;
                     font-size: 12px;
@@ -815,7 +821,6 @@ export class UIManager {
             const item = items[i];
 
             const newSlot = slot.cloneNode(false);
-            slot.parentNode.replaceChild(newSlot, slot);
 
             if (item) {
                 const itemSprite = document.createElement('img');
@@ -829,13 +834,13 @@ export class UIManager {
                     quantityText.textContent = item.quantity;
                     quantityText.style.cssText = `
                         position: absolute;
-                        bottom: 2px;
-                        right: 2px;
+                        bottom: 1px;
+                        right: 1px;
                         background: rgba(0, 0, 0, 0.7);
                         color: white;
-                        font-size: 10px;
-                        padding: 1px 3px;
-                        border-radius: 3px;
+                        font-size: 8px;
+                        padding: 1px 2px;
+                        border-radius: 2px;
                     `;
                     newSlot.appendChild(quantityText);
                 }
@@ -847,6 +852,8 @@ export class UIManager {
                     this.hideTooltip();
                 });
             }
+            
+            slot.parentNode.replaceChild(newSlot, slot);
         }
     }
 
