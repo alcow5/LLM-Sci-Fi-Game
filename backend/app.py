@@ -927,7 +927,7 @@ def get_fallback_quest(npc_id):
                 }
             ]
         },
-        'rick_unfiltered': {
+        'unfiltered_rick': {
             'id': f'fallback_rick_{datetime.now().timestamp()}',
             'title': 'Shady Business',
             'description': 'Help me with some... let\'s say "unofficial" business around the outpost. Nothing illegal, just... creative.',
